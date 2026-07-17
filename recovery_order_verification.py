@@ -1111,6 +1111,86 @@ def verify_prerequisite_precedence_counterexample():
     }
 
 
+def verify_common_closure_condition():
+    """Edge j->k with the RATE condition satisfied (c_k = 0.5 <= c_j = 1) but with
+    DIFFERENT closures on the two capacities.  Both closures are admissible under
+    (A4), yet the child crosses q long before its prerequisite, so the common-closure
+    hypothesis of Theorem 1(b) is load-bearing on its own (Methods, Sharpness).
+
+        parent : dr_j/dt = c_j *       h_j(r_j),   h_j(r) = (1 - r)^3
+        child  : dr_k/dt = c_k * r_j * h_k(r_k),   h_k(r) = (1 - r)^0.2
+
+    with c_j = 1, c_k = 0.5, common onset r0 = 0.3, product gate, q = 0.9.
+
+    T_j is available in closed form.  T_k is obtained twice, independently:
+    by RK4 on the child's ODE, and by separation of variables (no ODE solver),
+    which must agree.
+    """
+    c_j, c_k, r0, q = 1.0, 0.5, 0.3, 0.9
+    p_j, p_k = 3.0, 0.2                        # closure exponents
+
+    # ---- parent, closed form -------------------------------------------------
+    #   dr/(1-r)^3 = c_j dt  =>  (1-r)^-2 / 2  is linear in t
+    #   T_j = [ (1-q)^-2 - (1-r0)^-2 ] / (2 c_j)
+    a = (1.0 - r0) ** -2
+    T_j = ((1.0 - q) ** -2 - a) / (2.0 * c_j)
+
+    def r_j(t):                                # inverse of the closed form
+        return 1.0 - (2.0 * c_j * t + a) ** -0.5
+
+    # ---- child, RK4 ----------------------------------------------------------
+    def f(t_, r_):
+        return c_k * r_j(t_) * max(1.0 - r_, 0.0) ** p_k
+
+    dt, t, r = 1e-4, 0.0, r0
+    T_k_rk4 = float("inf")
+    while t < 60.0:
+        if r >= q:
+            T_k_rk4 = t
+            break
+        k1 = f(t, r)
+        k2 = f(t + dt / 2.0, r + dt * k1 / 2.0)
+        k3 = f(t + dt / 2.0, r + dt * k2 / 2.0)
+        k4 = f(t + dt, r + dt * k3)
+        r += dt * (k1 + 2.0 * k2 + 2.0 * k3 + k4) / 6.0
+        t += dt
+
+    # ---- child, separation of variables (independent of the solver above) ----
+    #   INT_{r0}^{q} dr/(1-r)^p_k = c_k INT_0^T r_j(t) dt
+    #   LHS = [ (1-r0)^(1-p_k) - (1-q)^(1-p_k) ] / (1-p_k)
+    #   INT_0^T r_j dt = T - (1/c_j) [ (2 c_j T + a)^(1/2) - a^(1/2) ]
+    lhs = ((1.0 - r0) ** (1.0 - p_k) - (1.0 - q) ** (1.0 - p_k)) / (1.0 - p_k)
+
+    def g(T):                                  # zero at the true T_k
+        integral_r_j = T - ((2.0 * c_j * T + a) ** 0.5 - a ** 0.5) / c_j
+        return c_k * integral_r_j - lhs
+
+    lo, hi = 0.0, 60.0                         # g is increasing in T; bisect
+    for _ in range(200):
+        mid = 0.5 * (lo + hi)
+        if g(mid) < 0.0:
+            lo = mid
+        else:
+            hi = mid
+    T_k_sep = 0.5 * (lo + hi)
+
+    agree = abs(T_k_rk4 - T_k_sep) < 1e-2      # two independent routes to T_k
+
+    return {
+        "r0": r0, "q": q,
+        "c_parent": c_j, "c_child": c_k,
+        "rate_condition_holds": bool(c_k <= c_j),
+        "closure_parent": "(1-r)^%g" % p_j,
+        "closure_child": "(1-r)^%g" % p_k,
+        "T_parent": float(T_j),
+        "T_child_rk4": float(T_k_rk4),
+        "T_child_separation_of_variables": float(T_k_sep),
+        "two_routes_agree": bool(agree),
+        "child_reaches_milestone_first": bool(T_k_rk4 < T_j),
+        "common_closure_is_load_bearing": bool(c_k <= c_j and T_k_rk4 < T_j and agree),
+    }
+
+
 def verify_rate_compatibility_condition(n_samples=36, seed=0):
     """5-node chain.  Sufficient condition of Theorem 1(b): rate constants
     non-increasing along edges (c_k <= c_j).  Compared against the complementary
@@ -1395,11 +1475,21 @@ def main(fig_dir="."):
     bnd_str = ", ".join(f"r0={k:.1f}:{('%.2f'%v) if v!=float('inf') else 'none'}"
                         for k, v in bnd.items())
     print_(f"  reversal boundary c_child/c_parent : {bnd_str}")
+    cc = verify_common_closure_condition()
+    print_(f"  common closure dropped (c_child={cc['c_child']} <= c_parent={cc['c_parent']}, "
+          f"h_parent={cc['closure_parent']}, h_child={cc['closure_child']}, r0={cc['r0']}):")
+    print_(f"    T_parent = {cc['T_parent']:.2f}, T_child = {cc['T_child_rk4']:.2f} "
+          f"-> child first = {cc['child_reaches_milestone_first']}")
+    print_(f"    RK4 vs separation of variables agree : {cc['two_routes_agree']} "
+          f"({cc['T_child_rk4']:.4f} vs {cc['T_child_separation_of_variables']:.4f})")
+    print_(f"    => common-closure hypothesis is load-bearing : "
+          f"{cc['common_closure_is_load_bearing']}")
     report["theorem1_corrected"] = {
         "counterexample": ce,
         "rate_condition": rc,
         "onset_precedence": op,
         "reversal_boundary": {str(k): v for k, v in bnd.items()},
+        "common_closure": cc,
     }
 
     print_("\n[6/8] Branching DAG and the two instantiations ...")
@@ -1509,6 +1599,8 @@ def main(fig_dir="."):
           and mot["poset_reproduced"]
           and cur["poset_reproduced"]
           and ce["child_reaches_milestone_first"]           # counterexample reproduced
+          and cc["common_closure_is_load_bearing"]          # common closure is load-bearing
+          and cc["two_routes_agree"]                        # RK4 == separation of variables
           and rc["non_increasing"]["graph_order_violations"] == 0  # sufficient condition holds
           and op["onset_order_violations"] == 0             # onset precedence unconditional
           and gf["same_admissible_set"]                     # Proposition A.3

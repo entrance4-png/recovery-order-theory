@@ -46,6 +46,7 @@ every result is deterministic.
 | **Theorem 1(a)**. onset precedence is **unconditional** | 120 random rate vectors, including strongly increasing ones |
 | **Theorem 1(b)**. milestone precedence holds when rates do not increase along edges (`c_k ≤ c_j`) | 108 samples with non-increasing rates vs 108 with increasing rates |
 | **Sharpness**. the rate condition cannot be dropped | the counterexample (`r0 = 0.5`, `c_j = 1`, `c_k = 100`) and the reversal boundary |
+| **Sharpness**. the common closure cannot be dropped either | `c_j = 1`, `c_k = 0.5` (rate condition holds), `h_j = (1-r)^3`, `h_k = (1-r)^0.2`, `r0 = 0.3`: the child crosses first (`T_k = 2.83` vs `T_j = 48.98`). `T_k` is obtained twice, by RK4 and by separation of variables |
 | **Proposition A.3**. the gate enters only through its **support** | the same graph under the product gate and the min gate (a different t-norm with the same support) |
 | **Theorem 2(a)**. soundness: every realized order is a linear extension | chain (243-point pre-declared grid) and branch |
 | **Theorem 2(b)**. completeness: every linear extension is realized | 30 random DAGs; rates decaying along a target extension σ |
@@ -79,6 +80,8 @@ non-increasing rates              : 0/108 violations
 increasing rates                  : 102/108 violations
 onset precedence                  : 0/120 violations
 reversal boundary                 : r0=0.0:1.64 ... r0=0.7:1.22
+common closure dropped            : T_parent = 48.98, T_child = 2.83; child first
+RK4 vs separation of variables    : agree (2.8295 vs 2.8294)
 product gate / min gate           : 0/200, 0/200 violations; same admissible set
 completeness                      : 30/30 targets realized
 ```
@@ -98,7 +101,7 @@ If you use this code, please cite the paper and the archived release:
 > systems is set by dependency structure". *Zenodo* <https://doi.org/10.5281/zenodo.21351889> (2026).
 
 The concept DOI `10.5281/zenodo.21351889` always resolves to the latest version. The current
-release is v1.0.1 (`10.5281/zenodo.21405028`).
+release is v1.0.2.
 
 ## License
 
