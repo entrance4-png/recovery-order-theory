@@ -1,6 +1,6 @@
 # recovery-order-theory
 
-[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.21351890.svg)](https://doi.org/10.5281/zenodo.21351890)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.21351889.svg)](https://doi.org/10.5281/zenodo.21351889)
 
 Numerical verification code for
 
@@ -17,7 +17,7 @@ here confirm that concrete minimal models behave exactly as those theorems requi
 
 ## Quick start
 
-```bash
+```
 git clone https://github.com/entrance4-png/recovery-order-theory.git
 cd recovery-order-theory
 pip install -r requirements.txt
@@ -39,7 +39,7 @@ every result is deterministic.
 ## What is checked
 
 | Claim in the paper | Check |
-|---|---|
+| --- | --- |
 | **Theorem A**. Fisher information factorizes through the dependency graph, `I_k = c_k · Π_{j ∈ anc(k)} r_j` | closed form vs Monte-Carlo (variance of the score) vs the product, over a random grid of availability levels; and the zero-pattern of the Fisher field vs the graph |
 | **Theorem B1**. posterior precision accumulates Fisher information, `dP_k/dt = I_k` | exact conjugate precision addition vs the accumulation ODE |
 | **Theorem B2/B3**. the recovery law `dr_k/dt = c'_k · A_k · (1 - r_k)` is derived, not assumed | integrating the Fisher-first pipeline through the derived link vs the companion law |
@@ -55,7 +55,7 @@ every result is deterministic.
 `recovery_order_verification.py <outdir>` writes the paper's figures to `<outdir>`:
 
 | File | In the paper |
-|---|---|
+| --- | --- |
 | `Figure1_Factorization.png` | Fig. 1 |
 | `Figure2_RecoveryLaw.png` | Fig. 2 |
 | `Figure3_Ordering.png` | Fig. 3 |
@@ -95,9 +95,10 @@ from a system's geometry is the paper's central open problem.
 If you use this code, please cite the paper and the archived release:
 
 > Saito, H. recovery-order-theory: numerical verification for "Recovery order in adaptive
-> systems is set by dependency structure". *Zenodo* https://doi.org/10.5281/zenodo.21351890 (2026).
+> systems is set by dependency structure". *Zenodo* <https://doi.org/10.5281/zenodo.21351889> (2026).
 
-The concept DOI `10.5281/zenodo.21351889` always resolves to the latest version.
+The concept DOI `10.5281/zenodo.21351889` always resolves to the latest version. The current
+release is v1.0.1 (`10.5281/zenodo.21405028`).
 
 ## License
 

@@ -3,7 +3,7 @@
 r"""
 recovery_order_verification.py
 ================================================================================
-Recovery order in adaptive systems is set by identifiability structure.
+Recovery order in adaptive systems is set by dependency structure.
 Numerical validation of the structure theorem (Methods, Theorems 1-3) and of its
 Fisher realization (Theorems A and B), together with the three instantiations:
 a chain (hierarchical recovery in catatonia -> the Saito Loop), a branch
