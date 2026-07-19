@@ -82,6 +82,7 @@ onset precedence                  : 0/120 violations
 reversal boundary                 : r0=0.0:1.64 ... r0=0.7:1.22
 common closure dropped            : T_parent = 48.98, T_child = 2.83; child first
 RK4 vs separation of variables    : agree (2.8295 vs 2.8294)
+paired closure sweep (48 edges)    : differing closure 48/48 reverse, common closure 0/48
 product gate / min gate           : 0/200, 0/200 violations; same admissible set
 completeness                      : 30/30 targets realized
 ```

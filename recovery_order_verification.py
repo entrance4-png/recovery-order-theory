@@ -1111,7 +1111,44 @@ def verify_prerequisite_precedence_counterexample():
     }
 
 
-def verify_common_closure_condition():
+def _edge_milestone_batch(cj, ck, r0, pj, pk, q=0.9, t_max=200.0, dt=2e-3):
+    """Milestone times (T_j, T_k) for a BATCH of two-node edges j->k with the
+    product gate and per-node deficit-closing exponents, integrated with one
+    shared fixed-step RK4:
+        dr_j/dt = c_j *        (1 - r_j)^p_j        (root, gate = 1)
+        dr_k/dt = c_k * r_j *  (1 - r_k)^p_k        (child, gated by the parent)
+    All arguments are length-B arrays (or broadcastable scalars).  Returns
+    (T_j, T_k), each length B, with np.inf where q is not reached by t_max."""
+    cj = np.asarray(cj, float); ck = np.asarray(ck, float)
+    pj = np.asarray(pj, float); pk = np.asarray(pk, float)
+    rj = np.array(np.broadcast_to(np.asarray(r0, float), cj.shape), float).copy()
+    rk = rj.copy()
+    Tj = np.where(rj >= q, 0.0, np.inf)
+    Tk = np.where(rk >= q, 0.0, np.inf)
+
+    def d(rjv, rkv):
+        drj = cj * np.clip(1.0 - rjv, 0.0, None) ** pj
+        drk = ck * rjv * np.clip(1.0 - rkv, 0.0, None) ** pk
+        return drj, drk
+
+    n = int(round(t_max / dt))
+    for i in range(n):
+        a1, b1 = d(rj, rk)
+        a2, b2 = d(rj + .5 * dt * a1, rk + .5 * dt * b1)
+        a3, b3 = d(rj + .5 * dt * a2, rk + .5 * dt * b2)
+        a4, b4 = d(rj + dt * a3, rk + dt * b3)
+        rj = rj + (dt / 6.0) * (a1 + 2 * a2 + 2 * a3 + a4)
+        rk = rk + (dt / 6.0) * (b1 + 2 * b2 + 2 * b3 + b4)
+        t = (i + 1) * dt
+        nj = (rj >= q) & np.isinf(Tj); Tj[nj] = t
+        nk = (rk >= q) & np.isinf(Tk); Tk[nk] = t
+        if np.all(np.isfinite(Tj)) and np.all(np.isfinite(Tk)):
+            break
+    return Tj, Tk
+
+
+def verify_common_closure_condition(sweep_n_draws=16, sweep_onsets=(0.1, 0.3, 0.5),
+                                    sweep_seed=7):
     """Edge j->k with the RATE condition satisfied (c_k = 0.5 <= c_j = 1) but with
     DIFFERENT closures on the two capacities.  Both closures are admissible under
     (A4), yet the child crosses q long before its prerequisite, so the common-closure
@@ -1128,6 +1165,7 @@ def verify_common_closure_condition():
     """
     c_j, c_k, r0, q = 1.0, 0.5, 0.3, 0.9
     p_j, p_k = 3.0, 0.2                        # closure exponents
+    assert p_j == 3.0, "the parent closed form below is specific to p_j = 3"
 
     # ---- parent, closed form -------------------------------------------------
     #   dr/(1-r)^3 = c_j dt  =>  (1-r)^-2 / 2  is linear in t
@@ -1176,6 +1214,34 @@ def verify_common_closure_condition():
 
     agree = abs(T_k_rk4 - T_k_sep) < 1e-2      # two independent routes to T_k
 
+    # ---- paired sweep: closure difference is the ONLY changed variable --------
+    # 48 = 16 rate/closure draws x 3 common onsets.  Each draw keeps the rate
+    # condition (c_k <= c_j) and the product gate.  The DIFFERING arm gives the
+    # child a weak deficit-closing exponent (stays fast near the milestone) and
+    # the parent a strong one; the COMMON arm gives BOTH the parent's closure,
+    # holding rates and onset identical.  Under a common closure Theorem 1(b)
+    # forbids any reversal; dropping it should let the child overtake.  The two
+    # arms share every rate/onset draw, so the closure is the only difference.
+    rng = np.random.default_rng(sweep_seed)
+    cj_s, ck_s, pj_s, pk_s, r0_s = [], [], [], [], []
+    for _ in range(sweep_n_draws):
+        cj = float(rng.uniform(0.6, 1.4))
+        ck = float(rng.uniform(0.3, cj))            # rate condition: c_k <= c_j
+        pj = float(rng.uniform(2.0, 3.0))           # parent: strong deficit-closing
+        pk = float(rng.uniform(0.1, 0.5))           # child : weak  deficit-closing
+        for r0v in sweep_onsets:
+            cj_s.append(cj); ck_s.append(ck)
+            pj_s.append(pj); pk_s.append(pk); r0_s.append(float(r0v))
+    cj_a = np.array(cj_s); ck_a = np.array(ck_s)
+    pj_a = np.array(pj_s); pk_a = np.array(pk_s); r0_a = np.array(r0_s)
+    n_samples = len(r0_s)
+    # differing closures (parent p_j, child p_k):
+    Tj_d, Tk_d = _edge_milestone_batch(cj_a, ck_a, r0_a, pj_a, pk_a, q=q)
+    diff_rev = int(np.sum(Tk_d < Tj_d))
+    # common closure (BOTH get the parent's exponent p_j), same rates/onsets:
+    Tj_c, Tk_c = _edge_milestone_batch(cj_a, ck_a, r0_a, pj_a, pj_a, q=q)
+    comm_rev = int(np.sum(Tk_c < Tj_c))
+
     return {
         "r0": r0, "q": q,
         "c_parent": c_j, "c_child": c_k,
@@ -1188,6 +1254,12 @@ def verify_common_closure_condition():
         "two_routes_agree": bool(agree),
         "child_reaches_milestone_first": bool(T_k_rk4 < T_j),
         "common_closure_is_load_bearing": bool(c_k <= c_j and T_k_rk4 < T_j and agree),
+        # paired sweep results:
+        "sweep_n_samples": int(n_samples),
+        "sweep_differing_closure_reversals": int(diff_rev),
+        "sweep_common_closure_reversals": int(comm_rev),
+        "sweep_differing_all_reverse": bool(diff_rev == n_samples),
+        "sweep_common_none_reverse": bool(comm_rev == 0),
     }
 
 
@@ -1484,6 +1556,12 @@ def main(fig_dir="."):
           f"({cc['T_child_rk4']:.4f} vs {cc['T_child_separation_of_variables']:.4f})")
     print_(f"    => common-closure hypothesis is load-bearing : "
           f"{cc['common_closure_is_load_bearing']}")
+    print_(f"    paired sweep ({cc['sweep_n_samples']} samples = 16 draws x 3 onsets, "
+          f"same rates/onset, only closure differs):")
+    print_(f"      differing closure : {cc['sweep_differing_closure_reversals']}"
+          f"/{cc['sweep_n_samples']} edges reversed")
+    print_(f"      common   closure : {cc['sweep_common_closure_reversals']}"
+          f"/{cc['sweep_n_samples']} edges reversed")
     report["theorem1_corrected"] = {
         "counterexample": ce,
         "rate_condition": rc,
@@ -1601,6 +1679,8 @@ def main(fig_dir="."):
           and ce["child_reaches_milestone_first"]           # counterexample reproduced
           and cc["common_closure_is_load_bearing"]          # common closure is load-bearing
           and cc["two_routes_agree"]                        # RK4 == separation of variables
+          and cc["sweep_differing_all_reverse"]             # 48/48 reverse with differing closure
+          and cc["sweep_common_none_reverse"]               # 0/48 reverse with common closure
           and rc["non_increasing"]["graph_order_violations"] == 0  # sufficient condition holds
           and op["onset_order_violations"] == 0             # onset precedence unconditional
           and gf["same_admissible_set"]                     # Proposition A.3
