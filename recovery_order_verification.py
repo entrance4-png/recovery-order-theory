@@ -827,8 +827,8 @@ def robustness_grid_fisher_first():
 # 5. FIGURES
 # =============================================================================
 plt.rcParams.update({
-    "font.family": "DejaVu Serif", "font.size": 10, "axes.linewidth": 0.8,
-    "savefig.dpi": 300, "figure.dpi": 150, "mathtext.fontset": "dejavuserif",
+    "font.family": "DejaVu Sans", "font.size": 10, "axes.linewidth": 0.8,
+    "savefig.dpi": 300, "figure.dpi": 150, "mathtext.fontset": "dejavusans",
 })
 _COLORS = ["#1b4965", "#2a9d8f", "#e9c46a", "#e76f51", "#9b2226"]
 _CMAP = {q: _COLORS[i] for i, q in enumerate(QUANTITIES)}
@@ -869,7 +869,7 @@ def figure1_factorization(resA, path):
             if R[i, j]:
                 axB.text(j, i, "1", ha="center", va="center",
                          color="white", fontsize=9)
-    axB.set_title("b  Support of $I_k$ = prerequisite graph",
+    axB.set_title("b  Support of $I_k$ = ancestor relation of the graph",
                   loc="left", fontsize=10, fontweight="bold")
     _finalize(fig, path)
 
@@ -891,12 +891,12 @@ def figure2_accumulation_and_law(resB, accB, path):
     P_ode = P0 + c * gate * np.arange(1, n + 1)
     x = np.arange(1, n + 1)
     axA.plot(x, P_exact, color="#1b4965", lw=1.4,
-             label="exact conjugate addition")
+             label="realized information accumulation")
     axA.plot(x, P_ode, color="#e76f51", lw=1.4, ls="--",
-             label=r"$dP_k/dt = I_k$")
+             label=r"expected flux  $dP_k/dt = I_k$")
     axA.set_xlabel("observations (arb. time)")
-    axA.set_ylabel(r"posterior precision  $P_k$")
-    axA.set_title("a  Precision accumulates Fisher information",
+    axA.set_ylabel(r"accumulated information  $P_k$")
+    axA.set_title("a  Information accumulates at its expected flux",
                   loc="left", fontsize=10, fontweight="bold")
     axA.legend(loc="upper left", frameon=False, fontsize=8)
 
@@ -914,7 +914,7 @@ def figure2_accumulation_and_law(resB, accB, path):
     axB.set_xlim(0, 12)
     axB.set_xlabel("time (arb. units)")
     axB.set_ylabel(r"recovery state  $r_k(t)$"); axB.set_ylim(0, 1.02)
-    axB.set_title("b  Derived law = companion law → Saito Loop",
+    axB.set_title("b  Recovery law through the deficit-proportional link",
                   loc="left", fontsize=10, fontweight="bold")
     axB.legend(loc="lower right", frameon=False, fontsize=8, ncol=1)
     axB.text(0.4, 0.92,
@@ -945,7 +945,7 @@ def figureS1_saturation(path):
              label=r"variance link:  $dr/dQ \propto (1-r)^2$")
     axB.set_xlabel(r"recovered fraction  $r_k$")
     axB.set_ylabel(r"marginal gain per unit information")
-    axB.set_title("b  The derived factor $(1-r_k)$",
+    axB.set_title("b  The closure factor $(1-r_k)$ ($s = 1$)",
                   loc="left", fontsize=10, fontweight="bold")
     axB.legend(loc="upper right", frameon=False, fontsize=8)
     _finalize(fig, path)
@@ -964,24 +964,21 @@ def figureS4_curriculum(cur, path):
     fig, axes = plt.subplots(1, 2, figsize=(7.3, 3.0), sharey=True)
     for ax, key, title in (
         (axes[0], "traj_S1_first",
-         "one regime:  S0 $\\rightarrow$ S1 $\\rightarrow$ S2 $\\rightarrow$ S3"),
+         "a  S1 faster:  S0 $\\rightarrow$ S1 $\\rightarrow$ S2 $\\rightarrow$ S3"),
         (axes[1], "traj_S2_first",
-         "another regime:  S0 $\\rightarrow$ S2 $\\rightarrow$ S1 $\\rightarrow$ S3"),
+         "b  S2 faster:  S0 $\\rightarrow$ S2 $\\rightarrow$ S1 $\\rightarrow$ S3"),
     ):
         Tt, Rr = cur[key]
         for i, q in enumerate(nodes):
             ax.plot(Tt, Rr[:, i], color=colors[q], lw=2.2, label=labels[q])
         ax.axhline(0.5, ls=":", color="0.5", lw=1)
         ax.set_xlabel("training time (arb. units)")
-        ax.set_title(title, fontsize=9.5)
+        ax.set_title(title, fontsize=10, loc="left", fontweight="bold")
         ax.set_xlim(0, 20); ax.set_ylim(0, 1.02)
         ax.spines[["top", "right"]].set_visible(False)
     axes[0].set_ylabel("skill mastery  r(t)")
-    axes[0].legend(frameon=False, fontsize=8.0, loc="lower right")
-    fig.suptitle("Curriculum learning (no likelihood): foundational skill first, "
-                 "composite last; intermediates swap (the two linear extensions)",
-                 fontsize=9.5, y=1.02)
-    _finalize(fig, path, dpi=200)
+    axes[0].legend(frameon=False, fontsize=9, loc="lower right")
+    _finalize(fig, path, dpi=300)
 
 
 def figureS3_motor(mot, path):
@@ -994,24 +991,21 @@ def figureS3_motor(mot, path):
     fig, axes = plt.subplots(1, 2, figsize=(7.3, 3.0), sharey=True)
     for ax, key, title in (
         (axes[0], "traj_distal_first",
-         "one regime:  proximal $\\rightarrow$ distal $\\rightarrow$ timing"),
+         "a  distal faster:  proximal $\\rightarrow$ distal $\\rightarrow$ timing"),
         (axes[1], "traj_timing_first",
-         "another regime:  proximal $\\rightarrow$ timing $\\rightarrow$ distal"),
+         "b  timing faster:  proximal $\\rightarrow$ timing $\\rightarrow$ distal"),
     ):
         Tt, Rr = mot[key]
         for i, q in enumerate(nodes):
             ax.plot(Tt, Rr[:, i], color=colors[q], lw=2.2, label=labels[q])
         ax.axhline(0.5, ls=":", color="0.5", lw=1)
         ax.set_xlabel("time (arb. units)")
-        ax.set_title(title, fontsize=9.5)
-        ax.set_xlim(0, Tt[-1]); ax.set_ylim(0, 1.02)
+        ax.set_title(title, fontsize=10, loc="left", fontweight="bold")
+        ax.set_xlim(0, 30); ax.set_ylim(0, 1.02)
         ax.spines[["top", "right"]].set_visible(False)
     axes[0].set_ylabel("recovery state  r(t)")
-    axes[0].legend(frameon=False, fontsize=8.5, loc="lower right")
-    fig.suptitle("Motor recovery instantiation: proximal base recovers first; "
-                 "fine control and timing swap (the two linear extensions)",
-                 fontsize=10, y=1.02)
-    _finalize(fig, path, dpi=200)
+    axes[0].legend(frameon=False, fontsize=9, loc="lower right")
+    _finalize(fig, path, dpi=300)
 
 
 
@@ -1409,15 +1403,23 @@ def figure3_ordering(grid, dag, path, phase=None):
     for i in range(len(r0s)):
         row = Z[i]; k = int(np.argmax(row < 0.5))
         bnd.append(ratios[k] if row[k] < 0.5 else np.nan)
-    axC.plot(bnd, r0s, color="k", lw=1.5)
+    axC.plot(bnd, r0s, color="k", lw=1.5, label="numerical boundary")
+    # closed-form boundary for the product gate and linear closure (Methods, Sharpness):
+    #   reversal iff c_k/c_j > L / (L - (q - r0)),  L = ln((1 - r0)/(1 - q)),  q = 0.9
+    _r0a = np.linspace(0.0, 0.85, 200)
+    _L = np.log((1.0 - _r0a) / (1.0 - 0.9))
+    axC.plot(_L / (_L - (0.9 - _r0a)), _r0a, color="w", ls=":", lw=1.4,
+             label="closed form")
     axC.axvline(1.0, ls="--", color="w", lw=1.0)
-    axC.text(0.58, 0.70, "prerequisite first\n(graph order)", color="w",
+    axC.text(0.97, 0.30, r"$c_k \leq c_j$", color="w", fontsize=7.2, ha="right",
+             va="center", rotation=90)
+    axC.text(0.53, 0.78, "prerequisite first\n(graph order)", color="w",
              fontsize=7.2, ha="left", va="center")
     axC.text(2.75, 0.68, "descendant first\n(reversal)", color="w",
              fontsize=7.2, ha="center", va="center")
     axC.set_xlabel(r"edge rate ratio  $c_k/c_j$")
     axC.set_ylabel(r"common onset  $r_0$")
-    axC.set_title("c  boundary of gating dominance",
+    axC.set_title("c  boundary of gating dominance ($q = 0.9$)",
                   loc="left", fontsize=10, fontweight="bold")
     axC.set_xlim(0.5, 4.0); axC.set_ylim(0, 0.85)
     _finalize(fig, path)
