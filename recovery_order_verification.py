@@ -186,7 +186,8 @@ ANC = ancestors()
 # Sort the ancestor indices.  ANC[q] is a set of *strings*, and Python randomizes
 # string hashing per process, so iterating the set directly makes the order (and
 # therefore the order in which fisher_montecarlo consumes random draws) depend on
-# PYTHONHASHSEED.  Sorting pins it, making every number below bit-reproducible.
+# PYTHONHASHSEED.  Sorting pins it, so every number below is reproducible to the printed
+# precision in the documented environment and to numerical tolerance across machines.
 ANC_IDX = [sorted(index(p) for p in ANC[q]) for q in QUANTITIES]
 
 
@@ -324,7 +325,7 @@ def verify_theorem_A(seed=0):
 # after an informative observation carrying Fisher information delta about
 # theta_k, P_k <- P_k + delta.  Accumulating the expected flux gives
 #     dP_k/dt = I_k(t).
-# We verify this by comparing (i) exact conjugate precision addition over a
+# We verify this by comparing (i) the realized accumulated information over a
 # stream of informative observations against (ii) the ODE dP/dt = I integrated
 # with the same expected flux.
 
@@ -687,7 +688,7 @@ def verify_theorem_B_equivalence(s=S_SCALE):
 #        ratio shrinks, the realized order must converge to sigma.
 
 def _sim_dag_gate(nodes, edges, cprime, gate="product", r0=0.02, q=0.5,
-                  t_max=None, dt=None):
+                  t_max=None, dt=None, return_times=False):
     """Milestone order on an arbitrary DAG under an arbitrary gate family.
     The gate is evaluated as a masked reduction over the ancestor matrix, so the
     inner loop is vectorized; the horizon and step are scaled to the rate spread
@@ -729,7 +730,8 @@ def _sim_dag_gate(nodes, edges, cprime, gate="product", r0=0.02, q=0.5,
             T[newly] = (i + 1) * dt
             if np.all(np.isfinite(T)):
                 break
-    return tuple(nodes[i] for i in np.argsort(T, kind="stable"))
+    order = tuple(nodes[i] for i in np.argsort(T, kind="stable"))
+    return (order, T) if return_times else order
 
 
 def verify_gate_family_invariance(n_samples=200, seed=0):
@@ -779,14 +781,28 @@ def verify_completeness(n_graphs=30, ratios=(0.9, 0.7, 0.5, 0.3), seed=1):
         cases.append((nodes, edges, exts[int(rng.integers(len(exts)))]))
     out = {}
     for rho in ratios:
-        hits = 0
+        hits = ties = unreached = stable = 0
         for nodes, edges, sigma in cases:
             c = {q: rho ** i for i, q in enumerate(sigma)}
-            realized = _sim_dag_gate(nodes, edges, [c[q] for q in nodes])
+            cv = [c[q] for q in nodes]
+            realized, T = _sim_dag_gate(nodes, edges, cv, return_times=True)
             hits += (realized == tuple(sigma))
-        out[str(rho)] = {"targets": len(cases), "realized": int(hits)}
+            # separation checks (v1.0.4): a grid tie is resolved in node-index order by the
+            # stable sort, so a realized target is counted as strictly separated only if
+            # every milestone was reached, no two milestone times coincide on the grid,
+            # and the order is unchanged when the step is halved.
+            unreached += int(not np.all(np.isfinite(T)))
+            ties += int(len(np.unique(T)) < len(T))
+            dt_half = 0.5 * 0.02 / max(max(cv), 1.0)
+            stable += int(_sim_dag_gate(nodes, edges, cv, dt=dt_half) == realized)
+        out[str(rho)] = {"targets": len(cases), "realized": int(hits),
+                         "grid_ties": int(ties), "unreached": int(unreached),
+                         "order_unchanged_at_half_step": int(stable)}
     out["complete_at_small_ratio"] = bool(
         out[str(min(ratios))]["realized"] == len(cases))
+    out["separation_ok"] = bool(all(
+        d["grid_ties"] == 0 and d["unreached"] == 0 and d["order_unchanged_at_half_step"] == d["targets"]
+        for k, d in out.items() if isinstance(d, dict)))
     return out
 
 
@@ -875,7 +891,7 @@ def figure1_factorization(resA, path):
 
 
 def figure2_accumulation_and_law(resB, accB, path):
-    """Fig 2. (a) dP/dt = I: exact conjugate precision addition vs accumulation.
+    """Fig 2. (a) dP/dt = I: realized accumulated information vs expected accumulation.
     (b) Fisher-first recovery r_k(t) (solid) coincides with the companion law
     (dashed); milestones cross in Saito Loop order."""
     fig, (axA, axB) = plt.subplots(1, 2, figsize=(9.4, 3.8))
@@ -1103,6 +1119,37 @@ def verify_prerequisite_precedence_counterexample():
         "child_reaches_milestone_first": bool(T2 < T1),
         "axioms_A1_A4_and_PropA3_satisfied": True,   # product gate + (1-r), c>0, r0 in [0,1)
     }
+
+
+def verify_non_nested_gate_counterexample(r0=0.3, q=0.9, dt=1e-4, t_max=12.0):
+    """Proposition A.3, sharpness of nestedness (G4). Chain 1->2->3, equal rates
+    c=1, common closure (1-r), common onset r0, with the NON-nested gates
+    phi_2 = r1^8 and phi_3 = sqrt(r1*r2): each gate is continuous, monotone,
+    normalized and positive exactly on the interior (G1-G3), but phi_3 is not
+    bounded by phi_2, so (G4) fails.  Capacity 3 then crosses q before its
+    prerequisite 2 although no rate constant increases along the edge."""
+    n = int(round(t_max / dt))
+    r = np.array([r0, r0, r0], dtype=float)
+    ts = np.arange(n + 1) * dt
+    H = np.empty((n + 1, 3)); H[0] = r
+
+    def f(x):
+        r1, r2, r3 = np.clip(x, 0.0, 1.0)
+        return np.array([1.0 - r1,
+                         (r1 ** 8) * (1.0 - r2),
+                         np.sqrt(r1 * r2) * (1.0 - r3)])
+
+    for i in range(n):
+        k1 = f(r); k2 = f(r + 0.5 * dt * k1)
+        k3 = f(r + 0.5 * dt * k2); k4 = f(r + dt * k3)
+        r = np.clip(r + dt * (k1 + 2 * k2 + 2 * k3 + k4) / 6.0, 0.0, 1.0)
+        H[i + 1] = r
+    T = [float(_milestone_time_1d(ts, H[:, k], q)) for k in range(3)]
+    return {"r0": r0, "q": q, "rates": [1.0, 1.0, 1.0],
+            "gates": ["1", "r1^8", "sqrt(r1*r2)"],
+            "T1": T[0], "T2": T[1], "T3": T[2],
+            "T1_closed_form": float(np.log((1.0 - r0) / (1.0 - q))),
+            "child3_crosses_before_parent2": bool(T[2] < T[1])}
 
 
 def _edge_milestone_batch(cj, ck, r0, pj, pk, q=0.9, t_max=200.0, dt=2e-3):
@@ -1488,11 +1535,16 @@ def main(fig_dir="."):
     # Theorem B (B1)
     accB = verify_precision_accumulation()
     print_("\n[Theorem B1] posterior precision accumulates Fisher info: dP/dt = I")
-    print_(f"  exact conjugate P_final : {accB['P_exact_final']:.2f}")
+    print_(f"  realized accumulated information P_final : {accB['P_exact_final']:.2f}")
     print_(f"  ODE dP/dt=I    P_final  : {accB['P_ode_final']:.2f}")
     print_(f"  relative discrepancy    : {accB['rel_discrepancy_final']*100:.2f}% "
           f"-> matches = {accB['matches']}")
     report["theoremB1"] = accB
+    accB_plot = verify_precision_accumulation(n_obs=6000, seed=3)
+    print_(f"  plotted run (Fig. 2a; 6,000 observations, seed 3): realized "
+           f"{accB_plot['P_exact_final']:.1f} vs expected {accB_plot['P_ode_final']:.1f} "
+           f"({accB_plot['rel_discrepancy_final']*100:.2f}%)")
+    report["theoremB1_plotted_run"] = accB_plot
 
     print_("\n[3/8] Theorem B2/B3 ...")
     # Theorem B (B2/B3)
@@ -1588,15 +1640,27 @@ def main(fig_dir="."):
                                "product_violations": gf["product"]["order_violations"],
                                "min_violations": gf["min"]["order_violations"]}
 
+    nn = verify_non_nested_gate_counterexample()
+    print_("\n[Proposition A.3, sharpness] a NON-nested gate family reverses an edge")
+    print_(f"  chain 1->2->3, equal rates, closure (1-r), r0={nn['r0']}, q={nn['q']}; "
+           f"gates {nn['gates']}")
+    print_(f"  T1 = {nn['T1']:.3f} (closed form {nn['T1_closed_form']:.3f}), "
+           f"T2 = {nn['T2']:.3f}, T3 = {nn['T3']:.3f}")
+    print_(f"  capacity 3 crosses before its prerequisite 2   : {nn['child3_crosses_before_parent2']}")
+    report["propositionA3_nestedness_sharpness"] = nn
+
     comp = verify_completeness()
     print_("\n[Theorem 2(b)] completeness: every linear extension is realized")
     print_("  random DAGs, rates decaying along a target extension sigma:")
     for rho, d in comp.items():
-        if rho == "complete_at_small_ratio":
+        if not isinstance(d, dict):
             continue
-        print_(f"    decay ratio {rho}: {d['realized']}/{d['targets']} targets realized")
+        print_(f"    decay ratio {rho}: {d['realized']}/{d['targets']} targets realized; "
+               f"grid ties {d['grid_ties']}, unreached {d['unreached']}, "
+               f"order unchanged at half step {d['order_unchanged_at_half_step']}/{d['targets']}")
     print_(f"  all targets realized at the smallest ratio      : "
            f"{comp['complete_at_small_ratio']}")
+    print_(f"  crossings strictly separated at every ratio     : {comp['separation_ok']}")
     report["theorem2b_completeness"] = comp
 
     # Theorem 2: a branching DAG yields a recovery poset (linear extensions)
@@ -1687,7 +1751,10 @@ def main(fig_dir="."):
           and op["onset_order_violations"] == 0             # onset precedence unconditional
           and gf["same_admissible_set"]                     # Proposition A.3
           and gf["min"]["order_violations"] == 0            # Thm 1(b) holds for a non-product gate
-          and comp["complete_at_small_ratio"])              # Theorem 2(b) completeness
+          and comp["complete_at_small_ratio"]               # Theorem 2(b) completeness
+          and nn["child3_crosses_before_parent2"]           # (G4) sharpness reproduced
+          and accB_plot["matches"]                          # Fig. 2a run matches
+          and comp["separation_ok"])                        # completeness: no grid ties, stable at dt/2
     print_("\n" + "=" * 74)
     print_("[8/8] done in %.0f s" % (time.time() - _t0))
     print_("OVERALL: all analytical claims of Theorems A and B reproduced =", ok)

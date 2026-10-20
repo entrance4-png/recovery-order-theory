@@ -1,0 +1,105 @@
+==========================================================================
+SAITO LOOP, information-geometric derivation: numerical verification
+==========================================================================
+
+[1/8] Theorem A: Fisher factorization (Monte-Carlo, ~5 s) ...
+
+[Theorem A]  Fisher information factorizes as c_k * prod r_j
+  channels x levels checked        : 80
+  closed-form == c_k*prod r (exact): max rel err 0.00e+00
+  Monte-Carlo == closed-form       : max rel err 2.49%
+  support(I_k) == prerequisite graph: True
+
+[2/8] Theorem B1 ...
+
+[Theorem B1] posterior precision accumulates Fisher info: dP/dt = I
+  realized accumulated information P_final : 6021.00
+  ODE dP/dt=I    P_final  : 6001.00
+  relative discrepancy    : 0.33% -> matches = True
+  plotted run (Fig. 2a; 6,000 observations, seed 3): realized 1791.5 vs expected 1801.0 (0.53%)
+
+[3/8] Theorem B2/B3 ...
+
+[Theorem B2/B3] derived law reproduces the companion recovery law
+  max |trajectory difference| : 1.36e-09 -> coincide = True
+  Fisher-first milestone order: pi_s -> beta -> pi_m -> pi_vfast -> pi_vslow
+  companion milestone order   : pi_s -> beta -> pi_m -> pi_vfast -> pi_vslow
+  both are the Saito Loop     : True
+
+[4/8] Robustness grid, 243 points (~20 s) ...
+
+[Robustness] Fisher-first pipeline over a pre-declared grid
+  points evaluated    : 243
+  distinct orderings  : 1 of 120
+  admitted ordering   : pi_s -> beta -> pi_m -> pi_vfast -> pi_vslow
+
+[5/8] Ordering theorem: counterexample, rate condition, onset, boundary (~15 s) ...
+
+[Theorem 1 corrected] onset precedence vs milestone precedence
+  counterexample r0=0.5, c_parent=1.0, c_child=100.0 (q=0.9):
+    T_parent=1.610  T_child=0.032  child first = True
+    axioms A1-A4 & Prop A.3 all hold = True  => unconditional Theorem 1 is FALSE
+  sufficient condition c_k<=c_j (5-node chain): non-increasing 0/108 violations; increasing 102/108 violations
+  onset precedence (arbitrary rates): 0/120 violations (0 => unconditional)
+  reversal boundary c_child/c_parent : r0=0.0:1.64, r0=0.1:1.57, r0=0.3:1.45, r0=0.5:1.33, r0=0.7:1.22
+  common closure dropped (c_child=0.5 <= c_parent=1.0, h_parent=(1-r)^3, h_child=(1-r)^0.2, r0=0.3):
+    T_parent = 48.98, T_child = 2.83 -> child first = True
+    RK4 vs separation of variables agree : True (2.8295 vs 2.8294)
+    => common-closure hypothesis is load-bearing : True
+    paired sweep (48 samples = 16 draws x 3 onsets, same rates/onset, only closure differs):
+      differing closure : 48/48 edges reversed
+      common   closure : 0/48 edges reversed
+
+[6/8] Branching DAG and the two instantiations ...
+
+[5b/8] Proposition A.3 and Theorem 2(b) ...
+
+[Proposition A.3] the gate family enters only through its support
+  diamond, rate condition enforced; product gate: 0/200 violations
+  same graph, MIN gate (same support, a t-norm)  : 0/200 violations
+  both gates admit the SAME set of orders        : True
+  and that set is the linear extensions          : True
+
+[Proposition A.3, sharpness] a NON-nested gate family reverses an edge
+  chain 1->2->3, equal rates, closure (1-r), r0=0.3, q=0.9; gates ['1', 'r1^8', 'sqrt(r1*r2)']
+  T1 = 1.946 (closed form 1.946), T2 = 4.227, T3 = 3.266
+  capacity 3 crosses before its prerequisite 2   : True
+
+[Theorem 2(b)] completeness: every linear extension is realized
+  random DAGs, rates decaying along a target extension sigma:
+    decay ratio 0.9: 14/30 targets realized; grid ties 0, unreached 0, order unchanged at half step 30/30
+    decay ratio 0.7: 16/30 targets realized; grid ties 0, unreached 0, order unchanged at half step 30/30
+    decay ratio 0.5: 30/30 targets realized; grid ties 0, unreached 0, order unchanged at half step 30/30
+    decay ratio 0.3: 30/30 targets realized; grid ties 0, unreached 0, order unchanged at half step 30/30
+  all targets realized at the smallest ratio      : True
+  crossings strictly separated at every ratio     : True
+
+[Theorems 1-3] branching DAG root->A, root->B (A,B incomparable)
+  linear extensions of graph  : ['root -> A -> B', 'root -> B -> A']
+  realized recovery orders    : ['root -> A -> B', 'root -> B -> A']
+  every order is an extension  : True
+  both extensions realized     : True
+  prerequisite always first    : True
+
+[Second instantiation] motor recovery: proximal -> {distal, timing}
+  linear extensions           : ['proximal -> distal -> timing', 'proximal -> timing -> distal']
+  realized recovery orders    : ['proximal -> distal -> timing', 'proximal -> timing -> distal']
+  every order is an extension  : True
+  both extensions realized     : True
+  prerequisite (proximal) first: True
+
+[Third instantiation] curriculum learning (no likelihood): S0 -> {S1, S2} -> S3
+  linear extensions           : ['S0 -> S1 -> S2 -> S3', 'S0 -> S2 -> S1 -> S3']
+  realized acquisition orders : ['S0 -> S1 -> S2 -> S3', 'S0 -> S2 -> S1 -> S3']
+  every order is an extension  : True
+  both extensions realized     : True
+  foundational first, comp. last: True
+
+[7/8] Figures (Fig. 3c sweeps a 26 x 30 phase grid, ~10 s) ...
+[Figures] writing to /tmp/claude-0/-home-claude/2a870fee-ccf1-5eb5-84a2-342ca57fe545/scratchpad/figrun3
+  wrote Figure1_Factorization.png, Figure2_RecoveryLaw.png, Figure3_Ordering.png, FigureS1_Saturation.png, FigureS2_Counterexample.png, FigureS3_Motor.png, FigureS4_Curriculum.png
+
+==========================================================================
+[8/8] done in 138 s
+OVERALL: all analytical claims of Theorems A and B reproduced = True
+==========================================================================
